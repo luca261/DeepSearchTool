@@ -1,0 +1,22 @@
+{
+  "name": "openresearcher",
+  "version": "1.1.0",
+  "description": "OpenResearcher - AI Research Dashboard powered by n8n",
+  "private": true,
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace=server\" \"npm run dev --workspace=client\"",
+    "build": "npm run build --workspace=server && npm run build --workspace=client",
+    "start": "npm run start --workspace=server",
+    "install:all": "npm install --workspace=server && npm install --workspace=client"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "keywords": ["research", "dashboard", "ai", "n8n", "automation"],
+  "author": "BC Consulting",
+  "license": "MIT"
+}
