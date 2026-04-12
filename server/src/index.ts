@@ -1,6 +1,8 @@
 import 'express-async-errors'
 import express from 'express'
 import cors from 'cors'
+import helmet from 'helmet'
+import rateLimit from 'express-rate-limit'
 import dotenv from 'dotenv'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -14,7 +16,8 @@ import { startRetryWorker, stopRetryWorker } from './retryWorker.js'
 dotenv.config()
 
 // Enforce required secrets at startup
-if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'your-secret-key-here-change-in-production') {
+const jwtSecret = process.env.JWT_SECRET
+if (!jwtSecret || jwtSecret.startsWith('your-') || jwtSecret.startsWith('dev-secret')) {
   if (process.env.NODE_ENV === 'production') {
     console.error('FATAL: JWT_SECRET must be set to a secure value in production')
     process.exit(1)
@@ -27,29 +30,38 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
 const PORT = process.env.PORT || 5000
 
+// Security headers
+app.use(helmet({
+  contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false,
+}))
+
 // Middleware
 app.use(cors({
   origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
   credentials: true,
 }))
-app.use(express.json())
-app.use(express.urlencoded({ extended: true }))
+app.use(express.json({ limit: '10kb' }))
+app.use(express.urlencoded({ extended: true, limit: '10kb' }))
 
 // Health check
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
 })
 
+// Rate limiting for auth endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please try again later.' },
+})
+
 // API Routes — mounted under /api to match client fetch calls
-app.use('/api/auth', authRoutes)
+app.use('/api/auth', authLimiter, authRoutes)
 app.use('/api/research', researchRoutes)
 app.use('/api/settings', settingsRoutes)
 app.use('/api/n8n-callback', n8nCallbackRoutes)
-
-// Legacy routes (no /api prefix) kept for backward-compat / health checks
-app.use('/auth', authRoutes)
-app.use('/research', researchRoutes)
-app.use('/settings', settingsRoutes)
 
 // Serve React client (production build) in all environments
 const clientDist = path.join(__dirname, '..', '..', 'client', 'dist')
@@ -65,9 +77,11 @@ if (fs.existsSync(clientDist)) {
 // Error handling middleware
 app.use((err: Error & { status?: number }, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('Unhandled error:', err)
-  res.status((err as { status?: number }).status || 500).json({
-    error: err.message || 'Internal server error',
-  })
+  const status = err.status || 500
+  const message = process.env.NODE_ENV === 'production' && status === 500
+    ? 'Internal server error'
+    : err.message || 'Internal server error'
+  res.status(status).json({ error: message })
 })
 
 // 404 handler (API only — SPA handled above in production)

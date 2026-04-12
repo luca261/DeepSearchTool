@@ -17,20 +17,29 @@
  */
 
 import { Router, Request, Response } from 'express'
+import { timingSafeEqual, createHash } from 'crypto'
 import { getDatabase } from '../db.js'
+
+function safeCompare(a: string, b: string): boolean {
+  const bufA = createHash('sha256').update(a).digest()
+  const bufB = createHash('sha256').update(b).digest()
+  return timingSafeEqual(bufA, bufB)
+}
 
 const router = Router()
 
 router.post('/', async (req: Request, res: Response) => {
   const callbackSecret = process.env.N8N_CALLBACK_SECRET
 
-  // If N8N_CALLBACK_SECRET is set, enforce it
-  if (callbackSecret) {
-    const providedSecret = req.headers['x-n8n-secret'] as string | undefined
-    if (!providedSecret || providedSecret !== callbackSecret) {
-      res.status(401).json({ error: 'Unauthorized' })
-      return
-    }
+  if (!callbackSecret) {
+    res.status(503).json({ error: 'Callback endpoint not configured. Set N8N_CALLBACK_SECRET.' })
+    return
+  }
+
+  const providedSecret = req.headers['x-n8n-secret'] as string | undefined
+  if (!providedSecret || !safeCompare(callbackSecret, providedSecret)) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
   }
 
   const { execution_id, status, report, confidence_score } = req.body as {

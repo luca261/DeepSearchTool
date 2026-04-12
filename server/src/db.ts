@@ -16,6 +16,7 @@ export async function initializeDatabase(): Promise<Database> {
   })
 
   await db.exec('PRAGMA foreign_keys = ON')
+  await db.exec('PRAGMA journal_mode = WAL')
 
   // Create tables
   await db.exec(`

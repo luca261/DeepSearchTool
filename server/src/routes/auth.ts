@@ -15,6 +15,16 @@ router.post('/register', async (req, res) => {
       return
     }
 
+    if (typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      res.status(400).json({ error: 'Invalid email format' })
+      return
+    }
+
+    if (typeof password !== 'string' || password.length < 6 || password.length > 128) {
+      res.status(400).json({ error: 'Password must be between 6 and 128 characters' })
+      return
+    }
+
     const db = getDatabase()
     const existingUser = await db.get('SELECT id FROM users WHERE email = ?', [email])
 
@@ -53,6 +63,11 @@ router.post('/login', async (req, res) => {
 
     if (!email || !password) {
       res.status(400).json({ error: 'Email and password required' })
+      return
+    }
+
+    if (typeof email !== 'string' || typeof password !== 'string') {
+      res.status(400).json({ error: 'Invalid input' })
       return
     }
 

@@ -14,7 +14,7 @@
 
 import axios from 'axios'
 
-const MCP_ENDPOINT = 'https://n8n-aimpact.up.railway.app/mcp-server/http'
+const MCP_ENDPOINT = process.env.N8N_MCP_ENDPOINT || 'https://n8n-aimpact.up.railway.app/mcp-server/http'
 const MAX_QUERY_LENGTH = 800
 
 // ---------------------------------------------------------------------------
@@ -97,7 +97,11 @@ async function mcpCall<T>(method: string, params: Record<string, unknown>): Prom
     throw new Error('MCP returned no text content block')
   }
 
-  return JSON.parse(textBlock.text) as T
+  try {
+    return JSON.parse(textBlock.text) as T
+  } catch {
+    throw new Error(`MCP returned invalid JSON: ${textBlock.text.slice(0, 200)}`)
+  }
 }
 
 // ---------------------------------------------------------------------------
